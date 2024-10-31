@@ -1,0 +1,34 @@
+services:
+  node1:
+    build: ./node
+    container_name: node1
+    hostname: node1
+    networks:
+      - raft_network
+  node2:
+    build: ./node
+    container_name: node2
+    hostname: node2
+    networks:
+      - raft_network
+  node3:
+    build: ./node
+    container_name: node3
+    hostname: node3
+    networks:
+      - raft_network
+  node4:
+    build: ./node
+    container_name: node4
+    hostname: node4
+    networks:
+      - raft_network
+  node5:
+    build: ./node
+    container_name: node5
+    hostname: node5
+    networks:
+      - raft_network
+networks:
+  raft_network:
+    driver: bridge
