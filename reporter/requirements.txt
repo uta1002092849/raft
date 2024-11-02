@@ -2,4 +2,3 @@ grpcio
 grpcio-tools
 asyncio
 flask
-streamlit
