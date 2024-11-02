@@ -138,3 +138,75 @@ class Raft(object):
             timeout,
             metadata,
             _registered_method=True)
+
+
+class ReportStub(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.SendReport = channel.unary_unary(
+                '/raft.Report/SendReport',
+                request_serializer=raft__pb2.ReportRequest.SerializeToString,
+                response_deserializer=raft__pb2.ReportResponse.FromString,
+                _registered_method=True)
+
+
+class ReportServicer(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def SendReport(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_ReportServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'SendReport': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendReport,
+                    request_deserializer=raft__pb2.ReportRequest.FromString,
+                    response_serializer=raft__pb2.ReportResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'raft.Report', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('raft.Report', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class Report(object):
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def SendReport(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/raft.Report/SendReport',
+            raft__pb2.ReportRequest.SerializeToString,
+            raft__pb2.ReportResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
