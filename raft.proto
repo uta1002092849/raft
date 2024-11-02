@@ -31,7 +31,10 @@ message RequestVoteResponse {
 
 message ReportRequest {
     string timeStamp = 1;
-    string reportMessage = 2;
+    string rpcType = 2;
+    string sender = 3;
+    string receiver = 4;
+    string action = 5;
 }
 
 message ReportResponse {
