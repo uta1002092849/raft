@@ -29,8 +29,21 @@ message RequestVoteResponse {
     bool voteGranted = 1;
 }
 
+message ReportRequest {
+    string timeStamp = 1;
+    string reportMessage = 2;
+}
+
+message ReportResponse {
+    bool success = 1;
+}
+
 service Raft {
     rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse);
     rpc RequestVote(RequestVoteRequest) returns (RequestVoteResponse);
+}
+
+service Report {
+    rpc SendReport(ReportRequest) returns (ReportResponse);
 }
 
