@@ -5,30 +5,51 @@ services:
     hostname: node1
     networks:
       - raft_network
+    cpuset: "0"
+    depends_on:
+      - reporter
   node2:
     build: ./node
     container_name: node2
     hostname: node2
     networks:
       - raft_network
+    cpuset: "1"
+    depends_on:
+      - reporter
   node3:
     build: ./node
     container_name: node3
     hostname: node3
     networks:
       - raft_network
+    cpuset: "2"
+    depends_on:
+      - reporter
   node4:
     build: ./node
     container_name: node4
     hostname: node4
     networks:
       - raft_network
+    cpuset: "3"
+    depends_on:
+      - reporter
   node5:
     build: ./node
     container_name: node5
     hostname: node5
     networks:
       - raft_network
+    cpuset: "4"
+    depends_on:
+      - reporter
+  reporter:
+    build: ./reporter
+    container_name: reporter
+    networks:
+      - raft_network
+    cpuset: "5"
 networks:
   raft_network:
     driver: bridge
