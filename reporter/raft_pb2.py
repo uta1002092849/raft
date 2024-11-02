@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nraft.proto\x12\x04raft\"&\n\x03Log\x12\t\n\x01o\x18\x01 \x01(\t\x12\t\n\x01t\x18\x02 \x01(\x05\x12\t\n\x01k\x18\x03 \x01(\x05\"L\n\x14\x41ppendEntriesRequest\x12\x10\n\x08leaderId\x18\x01 \x01(\t\x12\t\n\x01\x63\x18\x02 \x01(\x05\x12\x17\n\x04logs\x18\x03 \x03(\x0b\x32\t.raft.Log\"(\n\x15\x41ppendEntriesResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"7\n\x12RequestVoteRequest\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x13\n\x0b\x63\x61ndidateId\x18\x02 \x01(\t\"*\n\x13RequestVoteResponse\x12\x13\n\x0bvoteGranted\x18\x01 \x01(\x08\"9\n\rReportRequest\x12\x11\n\ttimeStamp\x18\x01 \x01(\t\x12\x15\n\rreportMessage\x18\x02 \x01(\t\"!\n\x0eReportResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x32\x94\x01\n\x04Raft\x12H\n\rAppendEntries\x12\x1a.raft.AppendEntriesRequest\x1a\x1b.raft.AppendEntriesResponse\x12\x42\n\x0bRequestVote\x12\x18.raft.RequestVoteRequest\x1a\x19.raft.RequestVoteResponse2A\n\x06Report\x12\x37\n\nSendReport\x12\x13.raft.ReportRequest\x1a\x14.raft.ReportResponseB\x08Z\x06./raftb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nraft.proto\x12\x04raft\"&\n\x03Log\x12\t\n\x01o\x18\x01 \x01(\t\x12\t\n\x01t\x18\x02 \x01(\x05\x12\t\n\x01k\x18\x03 \x01(\x05\"L\n\x14\x41ppendEntriesRequest\x12\x10\n\x08leaderId\x18\x01 \x01(\t\x12\t\n\x01\x63\x18\x02 \x01(\x05\x12\x17\n\x04logs\x18\x03 \x03(\x0b\x32\t.raft.Log\"(\n\x15\x41ppendEntriesResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"7\n\x12RequestVoteRequest\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x13\n\x0b\x63\x61ndidateId\x18\x02 \x01(\t\"*\n\x13RequestVoteResponse\x12\x13\n\x0bvoteGranted\x18\x01 \x01(\x08\"e\n\rReportRequest\x12\x11\n\ttimeStamp\x18\x01 \x01(\t\x12\x0f\n\x07rpcType\x18\x02 \x01(\t\x12\x0e\n\x06sender\x18\x03 \x01(\t\x12\x10\n\x08receiver\x18\x04 \x01(\t\x12\x0e\n\x06\x61\x63tion\x18\x05 \x01(\t\"!\n\x0eReportResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x32\x94\x01\n\x04Raft\x12H\n\rAppendEntries\x12\x1a.raft.AppendEntriesRequest\x1a\x1b.raft.AppendEntriesResponse\x12\x42\n\x0bRequestVote\x12\x18.raft.RequestVoteRequest\x1a\x19.raft.RequestVoteResponse2A\n\x06Report\x12\x37\n\nSendReport\x12\x13.raft.ReportRequest\x1a\x14.raft.ReportResponseB\x08Z\x06./raftb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -43,11 +43,11 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_REQUESTVOTERESPONSE']._serialized_start=237
   _globals['_REQUESTVOTERESPONSE']._serialized_end=279
   _globals['_REPORTREQUEST']._serialized_start=281
-  _globals['_REPORTREQUEST']._serialized_end=338
-  _globals['_REPORTRESPONSE']._serialized_start=340
-  _globals['_REPORTRESPONSE']._serialized_end=373
-  _globals['_RAFT']._serialized_start=376
-  _globals['_RAFT']._serialized_end=524
-  _globals['_REPORT']._serialized_start=526
-  _globals['_REPORT']._serialized_end=591
+  _globals['_REPORTREQUEST']._serialized_end=382
+  _globals['_REPORTRESPONSE']._serialized_start=384
+  _globals['_REPORTRESPONSE']._serialized_end=417
+  _globals['_RAFT']._serialized_start=420
+  _globals['_RAFT']._serialized_end=568
+  _globals['_REPORT']._serialized_start=570
+  _globals['_REPORT']._serialized_end=635
 # @@protoc_insertion_point(module_scope)
