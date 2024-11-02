@@ -46,6 +46,8 @@ services:
       - reporter
   reporter:
     build: ./reporter
+    ports:
+      - "5000:5000"
     container_name: reporter
     networks:
       - raft_network
