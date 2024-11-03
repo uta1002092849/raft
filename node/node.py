@@ -35,13 +35,13 @@ def sendReport(sender, receiver, rpcType, action):
 
 class RaftServicer(raft_pb2_grpc.RaftServicer):
     def __init__(self):
-        
         # To keep track of the current state of the node
         self.states = ["FOLLOWER", "CANDIDATE", "LEADER"]
         self.stateIndex = 0
         
         # To keep track of the current term of the node
         self.term = 0
+        self.c = -1 # Index of the most recently comitted operation
         
         # Get the system's hostname
         self.nodeId = HOSTNAME
@@ -52,6 +52,9 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         
         # To keep track of the logs of the current node
         self.logs = []
+
+        # To simulate the database
+        self.database = {}
         
         # Other nodes in the cluster (name, address), name will be the hostname specified in the docker-compose file
         self.otherNodes = [("node1", "node1:50051"), ("node2", "node2:50051"), ("node3", "node3:50051"), ("node4", "node4:50051"), ("node5", "node5:50051")]
@@ -66,6 +69,9 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         # Add task management
         self.current_task = None
         self.running = True
+
+        # To keep track of the leader
+        self.leadId = None
 
     def AppendEntries(self, request, context):
         """
@@ -84,7 +90,22 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         self.votedFor = None                            # Reset the votedFor variable if current node was a candidate
         self.voteCount = 0                              # Reset the vote count  if current node was a candidate
         self.logs = request.logs                        # Sync the logs with the leader
-        
+        self.leaderId = request.leaderId                # Update the leaderId
+
+        # Execute all the logs from current c to the leader's c
+        for i in range(self.c+1, request.c+1):
+            operation = self.logs[i].o
+            operationType = operation.operationType
+            if operationType == "READ":
+                dataItem = operation.dataItem
+                sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="Read", action="Read " + dataItem + " = " + self.database[dataItem])
+            elif operationType == "WRITE":
+                dataItem = operation.dataItem
+                dataValue = operation.value
+                self.database[dataItem] = dataValue
+                sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="Write", action="Write " + dataItem + " = " + dataValue)
+            self.c = i
+            self.term = self.logs[i].term
         return raft_pb2.AppendEntriesResponse(success=True)
 
     def RequestVote(self, request, context):
@@ -106,6 +127,30 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         # Otherwise, grant the vote to the candidate
         self.votedFor = request.candidateId
         return raft_pb2.RequestVoteResponse(voteGranted=True)
+    
+
+    def RequestOperation(self, request, context):
+        """
+        RPC call instanciated by the client to request an operation to be performed
+        """
+
+        # Check if this is a valid operation
+        operationType = request.operationType
+        dataItem = request.dataItem
+        if (operationType != "READ" and operationType != "WRITE") or (operationType == "WRITE" and dataItem is None):
+            return raft_pb2.OperationResponse(success=False)
+        
+        # If the request is sent to the non leader node
+        if self.states[self.stateIndex] != "LEADER":
+            return raft_pb2.OperationResponse(success=False, leaderAddr=self.leaderId)
+        
+        # Construct Log object
+        log = raft_pb2.Log(o = request, t = self.term, k = self.len(self.logs) + 1)
+        self.logs.append(log)
+
+        # Send the log to the followers
+        for id, addr in self.otherNodes:
+            asyncio.create_task(self.send_append_entries(id, addr))     # To Do, add logs here
     
     async def start_follower(self):
         """

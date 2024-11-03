@@ -5,7 +5,7 @@ import warnings
 
 import raft_pb2 as raft__pb2
 
-GRPC_GENERATED_VERSION = '1.67.0'
+GRPC_GENERATED_VERSION = '1.67.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -44,6 +44,11 @@ class RaftStub(object):
                 request_serializer=raft__pb2.RequestVoteRequest.SerializeToString,
                 response_deserializer=raft__pb2.RequestVoteResponse.FromString,
                 _registered_method=True)
+        self.RequestOperation = channel.unary_unary(
+                '/raft.Raft/RequestOperation',
+                request_serializer=raft__pb2.RequestOperationRequest.SerializeToString,
+                response_deserializer=raft__pb2.RequestOperationResponse.FromString,
+                _registered_method=True)
 
 
 class RaftServicer(object):
@@ -61,6 +66,12 @@ class RaftServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RequestOperation(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_RaftServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -73,6 +84,11 @@ def add_RaftServicer_to_server(servicer, server):
                     servicer.RequestVote,
                     request_deserializer=raft__pb2.RequestVoteRequest.FromString,
                     response_serializer=raft__pb2.RequestVoteResponse.SerializeToString,
+            ),
+            'RequestOperation': grpc.unary_unary_rpc_method_handler(
+                    servicer.RequestOperation,
+                    request_deserializer=raft__pb2.RequestOperationRequest.FromString,
+                    response_serializer=raft__pb2.RequestOperationResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -129,6 +145,33 @@ class Raft(object):
             '/raft.Raft/RequestVote',
             raft__pb2.RequestVoteRequest.SerializeToString,
             raft__pb2.RequestVoteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RequestOperation(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/raft.Raft/RequestOperation',
+            raft__pb2.RequestOperationRequest.SerializeToString,
+            raft__pb2.RequestOperationResponse.FromString,
             options,
             channel_credentials,
             insecure,
