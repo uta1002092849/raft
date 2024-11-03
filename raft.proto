@@ -5,15 +5,15 @@ option go_package = "./raft";
 package raft;
 
 message Log {
-    string o = 1;   // current log operation
-    int32 t = 2;    // term associated with this log
-    int32 k = 3;    // index of this log in the leader's logs
+    RequestOperationRequest o = 1;      // current log operation
+    int32 t = 2;                        // term associated with this log
+    int32 k = 3;                        // index of this log in the leader's logs
 }
 
 message AppendEntriesRequest {
     string leaderId = 1;    // so that followers know who is the current leader
     int32 c = 2;            // The index of the most recent commited operation
-    repeated Log logs = 3;  // simplified version: leader send the entires logs
+    repeated Log logs = 3;  // Leader send the entires logs
 }
 
 message AppendEntriesResponse {
@@ -41,9 +41,22 @@ message ReportResponse {
     bool success = 1;
 }
 
+message RequestOperationRequest {
+    string operationType = 1;   // Either Read or Write
+    string dataItem = 2;        // Location to Read or Write
+    int32 value = 3;            // Only use for Write
+}
+
+message RequestOperationResponse {
+    bool success = 1;           // Acknowledgement
+    int32 value = 2;            // Return value for read operation
+    string leaderAddr = 3;      // In case client send operation to non-leader
+}
+
 service Raft {
     rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse);
     rpc RequestVote(RequestVoteRequest) returns (RequestVoteResponse);
+    rpc RequestOperation(RequestOperationRequest) returns (RequestOperationResponse);
 }
 
 service Report {
