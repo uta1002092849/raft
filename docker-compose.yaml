@@ -52,6 +52,16 @@ services:
     networks:
       - raft_network
     cpuset: "5"
+  client:
+    build: ./client
+    container_name: client
+    ports:
+      - "5001:5001"
+    networks:
+      - raft_network
+    cpuset: "6"
+    depends_on:
+      - reporter
 networks:
   raft_network:
     driver: bridge

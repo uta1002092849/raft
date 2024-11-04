@@ -71,7 +71,7 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         self.running = True
 
         # To keep track of the leader
-        self.leadId = None
+        self.leaderId = None
 
     def AppendEntries(self, request, context):
         """
@@ -93,7 +93,7 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         self.leaderId = request.leaderId                # Update the leaderId
 
         # Execute all the logs from current c to the leader's c
-        for i in range(self.c+1, request.c+1):
+        for i in range(self.c + 1, request.c + 1):
             operation = self.logs[i].o
             operationType = operation.operationType
             if operationType == "READ":
@@ -104,8 +104,8 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
                 dataValue = operation.value
                 self.database[dataItem] = dataValue
                 sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="Write", action="Write " + dataItem + " = " + dataValue)
-            self.c = i
             self.term = self.logs[i].term
+        self.c = request.c
         return raft_pb2.AppendEntriesResponse(success=True)
 
     def RequestVote(self, request, context):
@@ -129,11 +129,12 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         return raft_pb2.RequestVoteResponse(voteGranted=True)
     
 
-    def RequestOperation(self, request, context):
+    async def RequestOperation(self, request, context):
         """
-        RPC call instanciated by the client to request an operation to be performed
+        Asynchronous RPC call instantiated by the client to request an operation to be performed
         """
-
+        sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="RequestOperation", action="Received")
+        
         # Check if this is a valid operation
         operationType = request.operationType
         dataItem = request.dataItem
@@ -142,15 +143,63 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         
         # If the request is sent to the non leader node
         if self.states[self.stateIndex] != "LEADER":
-            return raft_pb2.OperationResponse(success=False, leaderAddr=self.leaderId)
+            return raft_pb2.RequestOperationResponse(success=False, leaderAddr=self.leaderId)
         
         # Construct Log object
-        log = raft_pb2.Log(o = request, t = self.term, k = self.len(self.logs) + 1)
+        log = raft_pb2.Log(o=request, t=self.term, k=len(self.logs) + 1)
         self.logs.append(log)
 
-        # Send the log to the followers
-        for id, addr in self.otherNodes:
-            asyncio.create_task(self.send_append_entries(id, addr))     # To Do, add logs here
+        async def append_entries_to_follower(follower_id, follower_addr):
+            try:
+                # Create async channel
+                channel = grpc.aio.insecure_channel(follower_addr)
+                stub = raft_pb2_grpc.RaftStub(channel)
+                
+                # Set timeout for RPC call
+                async with channel:
+                    response = await stub.AppendEntries(
+                        raft_pb2.AppendEntriesRequest(
+                            leaderId=self.nodeId,
+                            c=self.c,
+                            logs=self.logs
+                        ),
+                        timeout=5.0  # 5 seconds timeout
+                    )
+                    return response.success
+            except Exception as e:
+                sendReport(
+                    sender=self.nodeId,
+                    receiver=follower_id,
+                    rpcType=f"Failed to send RPC AppendEntries: {e}",
+                    action="Failed"
+                )
+                return False
+
+        # Create tasks for all followers
+        tasks = [
+            append_entries_to_follower(follower_id, follower_addr)
+            for follower_id, follower_addr in self.otherNodes
+        ]
+        
+        # Wait for all responses (with success count starting at 1 for leader)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        success_count = 1 + sum(1 for result in results if result is True)
+
+        # If majority of the nodes have successfully appended the log, commit the log
+        if success_count > NUMBER_OF_NODES // 2:
+
+            self.c += 1
+            if operationType == "READ":
+                return raft_pb2.RequestOperationResponse(
+                    success=True,
+                    value=self.database[dataItem] if dataItem in self.database else None
+                )
+            elif operationType == "WRITE":
+                value = request.value
+                self.database[dataItem] = value
+                return raft_pb2.RequestOperationResponse(success=True)
+        else:
+            return raft_pb2.RequestOperationResponse(success=False)
     
     async def start_follower(self):
         """
@@ -249,12 +298,12 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
             sendReport(sender=self.nodeId, receiver=id, rpcType="AppendEntries", action="Sent")
             try:
                 response = await stub.AppendEntries(
-                    raft_pb2.AppendEntriesRequest(leaderId=str(self.nodeId), c=0, logs=self.logs)
+                    raft_pb2.AppendEntriesRequest(leaderId=str(self.nodeId), c=self.c, logs=self.logs)
                 )
                 # assume the logs are successfully synced for now
                 # To Do
             except grpc.RpcError as e:
-                sendReport(sender=self.nodeId, receiver=id, rpcType="Failed to send RPC AppendEntries", action="Failed")
+                sendReport(sender=self.nodeId, receiver=id, rpcType=f"Failed to send RPC AppendEntries: {e}", action="Failed")
     
 
     async def start(self):

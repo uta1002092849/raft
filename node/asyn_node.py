@@ -13,12 +13,12 @@ PORT = 50051
 HEARTBEAT_TIMEOUT = 5
 ELECTION_TIMEOUT_MIN = 10
 ELECTION_TIMEOUT_MAX = 15
-NUMBER_OF_NODES = 1
+NUMBER_OF_NODES = 5
 HOSTNAME = socket.gethostname()
 
 # Send report to the reporter
 def sendReport(sender, receiver, rpcType, action):
-    with grpc.insecure_channel('localhost:50052') as channel:
+    with grpc.insecure_channel('reporter:50052') as channel:
         stub = raft_pb2_grpc.ReportStub(channel)
         # Get the current time in milliseconds
         current_time_ms = str(datetime.datetime.now())
@@ -129,11 +129,12 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         return raft_pb2.RequestVoteResponse(voteGranted=True)
     
 
-    def RequestOperation(self, request, context):
+    async def RequestOperation(self, request, context):
         """
-        RPC call instanciated by the client to request an operation to be performed
+        Asynchronous RPC call instantiated by the client to request an operation to be performed
         """
         sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="RequestOperation", action="Received")
+        
         # Check if this is a valid operation
         operationType = request.operationType
         dataItem = request.dataItem
@@ -145,29 +146,53 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
             return raft_pb2.RequestOperationResponse(success=False, leaderAddr=self.leaderId)
         
         # Construct Log object
-        log = raft_pb2.Log(o = request, t = self.term, k = len(self.logs) + 1)
+        log = raft_pb2.Log(o=request, t=self.term, k=len(self.logs) + 1)
         self.logs.append(log)
 
-        # Send the log to the followers
-        successCount = 1
-        for id, addr in self.otherNodes:
-            # synchronize call
-            with grpc.insecure_channel(addr) as channel:
+        async def append_entries_to_follower(follower_id, follower_addr):
+            try:
+                # Create async channel
+                channel = grpc.aio.insecure_channel(follower_addr)
                 stub = raft_pb2_grpc.RaftStub(channel)
-                try:
-                    response = stub.AppendEntries(
-                        raft_pb2.AppendEntriesRequest(leaderId=self.nodeId, c=self.c, logs=self.logs)
+                
+                # Set timeout for RPC call
+                async with channel:
+                    response = await stub.AppendEntries(
+                        raft_pb2.AppendEntriesRequest(
+                            leaderId=self.nodeId,
+                            c=self.c,
+                            logs=self.logs
+                        ),
+                        timeout=5.0  # 5 seconds timeout
                     )
-                    if response.success:
-                        successCount += 1
-                except grpc.RpcError as e:
-                    sendReport(sender=self.nodeId, receiver=id, rpcType="Failed to send RPC AppendEntries", action="Failed")
+                    return response.success
+            except Exception as e:
+                sendReport(
+                    sender=self.nodeId,
+                    receiver=follower_id,
+                    rpcType="Failed to send RPC AppendEntries",
+                    action="Failed"
+                )
+                return False
+
+        # Create tasks for all followers
+        tasks = [
+            append_entries_to_follower(follower_id, follower_addr)
+            for follower_id, follower_addr in self.otherNodes
+        ]
         
+        # Wait for all responses (with success count starting at 1 for leader)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        success_count = 1 + sum(1 for result in results if result is True)
+
         # If majority of the nodes have successfully appended the log, commit the log
-        if successCount > NUMBER_OF_NODES // 2:
+        if success_count > NUMBER_OF_NODES // 2:
             self.c += 1
             if operationType == "READ":
-                return raft_pb2.RequestOperationResponse(success=True, value=self.database[dataItem])
+                return raft_pb2.RequestOperationResponse(
+                    success=True,
+                    value=self.database[dataItem] if dataItem in self.database else None
+                )
             elif operationType == "WRITE":
                 value = request.value
                 self.database[dataItem] = value
