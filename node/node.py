@@ -98,13 +98,13 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
             operationType = operation.operationType
             if operationType == "READ":
                 dataItem = operation.dataItem
-                sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="Read", action="Read " + dataItem + " = " + self.database[dataItem])
+                sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="Read", action="Read " + dataItem + " = " + (str(self.database[dataItem]) if dataItem in self.database else "Not Found"))
             elif operationType == "WRITE":
                 dataItem = operation.dataItem
                 dataValue = operation.value
                 self.database[dataItem] = dataValue
-                sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="Write", action="Write " + dataItem + " = " + dataValue)
-            self.term = self.logs[i].term
+                sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="Write", action="Write " + str(dataItem) + " = " + str(dataValue))
+            self.term = self.logs[i].t
         self.c = request.c
         return raft_pb2.AppendEntriesResponse(success=True)
 
@@ -143,7 +143,7 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         
         # If the request is sent to the non leader node
         if self.states[self.stateIndex] != "LEADER":
-            return raft_pb2.RequestOperationResponse(success=False, leaderAddr=self.leaderId)
+            return raft_pb2.RequestOperationResponse(success=False, leaderAddr=self.leaderId + ":50051")
         
         # Construct Log object
         log = raft_pb2.Log(o=request, t=self.term, k=len(self.logs) + 1)

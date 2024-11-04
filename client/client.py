@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify
 import grpc
 import raft_pb2
 import raft_pb2_grpc
+import sys
 
 app = Flask(__name__)
 
@@ -23,7 +24,9 @@ def operation():
         response = stub.RequestOperation(message)
         if not response.success and response.leaderAddr is not None:
             leaderAddr = response.leaderAddr
-
+            
+    print(f'Leader address: {leaderAddr}', file=sys.stderr)
+    
     data = request.json
     try:
         with grpc.insecure_channel(leaderAddr) as channel:
@@ -45,4 +48,4 @@ def operation():
         return jsonify({"success": False, "error": str(e)})
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5001)
+    app.run(debug=True, host="0.0.0.0", port=5001)
