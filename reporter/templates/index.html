@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Raft RPC Call Logs</title>
+    <title>Raft Client & RPC Call Logs</title>
 
     <!-- DataTables CSS -->
     <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css">
@@ -14,91 +14,267 @@
     <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
 
     <style>
+        /* General Styles */
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+
+        h1,
+        h2 {
+            color: #4D4D4D;
+        }
+
+        /* Layout */
+        .container {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .two-column-layout {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .column {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        /* Forms and Buttons */
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: block;
             color: #333;
         }
 
-        table {
+        input,
+        select {
             width: 100%;
-            margin-top: 20px;
-            border-collapse: collapse;
+            padding: 8px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            transition: border-color 0.3s;
         }
 
-        h1 {
-            color: #4D4D4D;
+        select:focus,
+        input:focus {
+            border-color: #4CAF50;
+            outline: none;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        button {
+            flex: 1;
+            padding: 10px;
+            font-size: 16px;
+            color: #fff;
+            background-color: #4CAF50;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        /* Result and Messages */
+        #result,
+        #fetchResult {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+
+        .success {
+            background-color: #e9f7ef;
+            color: #2d6a4f;
+        }
+
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+
+        /* DataTable */
+        #rpcTable {
+            width: 100%;
+            border-collapse: collapse;
         }
     </style>
 </head>
 
 <body>
-    <h1>Raft RPC Call Logs</h1>
-    <table id="rpcTable" class="display">
-        <thead>
-            <tr>
-                <th>Timestamp</th>
-                <th>Sender</th>
-                <th>Receiver</th>
-                <th>Action</th>
-                <th>RPC Type</th>
-            </tr>
-        </thead>
-        <tbody>
-            <!-- Rows will be dynamically loaded here -->
-        </tbody>
-    </table>
+    <div class="two-column-layout">
+        <!-- Raft RPC Call Logs Table -->
+        <div class="container column">
+            <h1>Raft RPC Call Logs</h1>
+            <table id="rpcTable" class="display">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Sender</th>
+                        <th>Receiver</th>
+                        <th>Action</th>
+                        <th>RPC Type</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Rows will be dynamically loaded here -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Raft Client Form -->
+        <div class="container column">
+            <h1>Raft Client</h1>
+            <div class="form-group">
+                <label for="dataItem">Data Item Key:</label>
+                <input type="text" id="dataItem" placeholder="Enter key (e.g., 'x')">
+            </div>
+            <div class="form-group">
+                <label for="value">Value (for WRITE operation):</label>
+                <input type="number" id="value" placeholder="Enter value">
+            </div>
+            <div class="button-group">
+                <button id="readBtn" onclick="performOperation('READ')">READ</button>
+                <button id="writeBtn" onclick="performOperation('WRITE')">WRITE</button>
+            </div>
+            <div id="result"></div>
+
+            <h2>Fetch Logs from Node</h2>
+            <!-- Dropdown for Node Selection -->
+            <div class="form-group">
+                <label for="nodeSelect">Select Node Address:</label>
+                <select id="nodeSelect">
+                    <option value="node1">node1</option>
+                    <option value="node2">node2</option>
+                    <option value="node3">node3</option>
+                    <option value="node4">node4</option>
+                    <option value="node5">node5</option>
+                </select>
+            </div>
+            <div class="button-group">
+                <button id="fetchLogsBtn" onclick="fetchLogs()">Fetch Logs</button>
+            </div>
+            <div id="fetchResult"></div>
+        </div>
+    </div>
 
     <script>
+        async function displayMessage(element, message, isSuccess = true) {
+            element.innerHTML = message;
+            element.className = isSuccess ? 'success' : 'error';
+        }
+
+        async function fetchLogs() {
+            const nodeAddr = document.getElementById('nodeSelect').value;
+            const resultDiv = document.getElementById('fetchResult');
+
+            try {
+                const response = await fetch('/fetchLogs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nodeAddr })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    displayMessage(resultDiv, `<pre>${JSON.stringify(data.logs, null, 2)}</pre>`);
+                } else {
+                    displayMessage(resultDiv, data.error || 'Failed to fetch logs', false);
+                }
+            } catch (error) {
+                displayMessage(resultDiv, 'Error connecting to server', false);
+            }
+        }
+
+        async function performOperation(operationType) {
+            const dataItem = document.getElementById('dataItem').value;
+            const value = document.getElementById('value').value;
+            const resultDiv = document.getElementById('result');
+
+            if (!dataItem) {
+                displayMessage(resultDiv, 'Please enter a data item key', false);
+                return;
+            }
+            if (operationType === 'WRITE' && !value) {
+                displayMessage(resultDiv, 'Please enter a value for WRITE operation', false);
+                return;
+            }
+
+            document.getElementById('readBtn').disabled = true;
+            document.getElementById('writeBtn').disabled = true;
+
+            try {
+                const response = await fetch('/operation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ operationType, dataItem, value })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    displayMessage(resultDiv, operationType === 'READ' ? `Read value: ${data.value}` : 'Write operation successful');
+                } else {
+                    displayMessage(resultDiv, data.error || 'Operation failed', false);
+                }
+            } catch (error) {
+                displayMessage(resultDiv, 'Error connecting to server', false);
+            }
+
+            document.getElementById('readBtn').disabled = false;
+            document.getElementById('writeBtn').disabled = false;
+        }
+
         $(document).ready(function () {
-            // Initialize DataTable
             const table = $('#rpcTable').DataTable({
                 paging: true,
                 searching: true,
                 ordering: true,
                 pageLength: 20,
-                columns: [
-                    { title: "Time Stamp" },
-                    { title: "Sender" },
-                    { title: "Receiver" },
-                    { title: "Action" },
-                    { title: "RPC Type" },
-                ]
+                order: [[0, 'desc']]
             });
 
-            // Function to load report data and populate the table
             async function loadReports() {
                 try {
                     const response = await fetch('/reports');
                     const reports = await response.json();
-
-                    // Clear previous data
                     table.clear();
-
-                    // Add each report to the table
                     reports.forEach(report => {
-
-                        // Add row to the DataTable
-                        table.row.add([
-                            report.time,            // Timestamp
-                            report.sender,          // sender
-                            report.receiver,        // receiver
-                            report.action,          // Action
-                            report.rpcType,         // RPC Type
-
-                        ]);
+                        table.row.add([report.time, report.sender, report.receiver, report.action, report.rpcType]);
                     });
-
-                    // Draw the updated table
-                    table.draw();
+                    table.draw(false);
                 } catch (error) {
                     console.error("Error loading report data:", error);
                 }
             }
 
-            // Load reports every few seconds
             setInterval(loadReports, 3000);
-            loadReports();  // Initial load
         });
     </script>
 </body>
