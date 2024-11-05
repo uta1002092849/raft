@@ -53,13 +53,23 @@ message RequestOperationResponse {
     string leaderAddr = 3;      // In case client send operation to non-leader
 }
 
+message fetchLogsRequest {
+    // empty for now
+}
+
+message fetchLogsResponse {
+    repeated Log logs = 1;
+}
+
+
 service Raft {
     rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse);
     rpc RequestVote(RequestVoteRequest) returns (RequestVoteResponse);
     rpc RequestOperation(RequestOperationRequest) returns (RequestOperationResponse);
+    rpc fetchLogs(fetchLogsRequest) returns (fetchLogsResponse);        // Let reporter fetch logs of node
 }
 
 service Report {
-    rpc SendReport(ReportRequest) returns (ReportResponse);
+    rpc SendReport(ReportRequest) returns (ReportResponse);             // rpc for follower node to send report to reporter node
 }
 
