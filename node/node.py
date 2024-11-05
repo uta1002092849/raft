@@ -212,6 +212,14 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         else:
             return raft_pb2.RequestOperationResponse(success=False)
     
+    
+    def fetchLogs(self, request, context):
+        """
+        RPC call instanciated by the reporter to fetch the logs of the current node
+        """
+        sendReport(sender="Reporter", receiver=self.nodeId, rpcType="FetchLogs", action="Received")
+        return raft_pb2.fetchLogsResponse(logs=self.logs)
+    
     async def start_follower(self):
         """
             Asynchronous, non-blocking sub-routine if the node is in the follower state
