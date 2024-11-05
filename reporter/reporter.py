@@ -2,7 +2,8 @@ import grpc
 import raft_pb2
 import raft_pb2_grpc
 from concurrent import futures
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
+import sys
 import threading
 
 # Initialize the Flask app
@@ -51,10 +52,67 @@ def get_reports():
     """
     return jsonify(reporter.reports)
 
+@app.route('/operation', methods=['POST'])
+def operation():
+    # Try to connect to the leader node
+    leaderAddr = 'node1:50051'
+    with grpc.insecure_channel(leaderAddr) as channel:
+        stub = raft_pb2_grpc.RaftStub(channel)
+        message = raft_pb2.RequestOperationRequest(
+            operationType="READ",
+            dataItem="x",
+            value=0
+        )
+        response = stub.RequestOperation(message)
+        if not response.success and response.leaderAddr is not None:
+            leaderAddr = response.leaderAddr
+
+    data = request.json
+    try:
+        with grpc.insecure_channel(leaderAddr) as channel:
+            stub = raft_pb2_grpc.RaftStub(channel)
+            message = raft_pb2.RequestOperationRequest(
+                operationType=data['operationType'],
+                dataItem=data['dataItem'],
+                value=int(data['value']) if data['value'] else 0
+            )
+            response = stub.RequestOperation(message)
+            
+            if response.success:
+                return jsonify({
+                    "success": True,
+                    "value": response.value if data['operationType'] == "READ" else None
+                })
+            return jsonify({"success": False, "error": "Operation failed"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+@app.route('/fetchLogs', methods=['POST'])
+def fetch_logs():
+    data = request.json
+    try:
+        with grpc.insecure_channel(data['nodeAddr'] + ':50051') as channel:
+            stub = raft_pb2_grpc.RaftStub(channel)
+            message = raft_pb2.fetchLogsRequest()
+            response = stub.fetchLogs(message)
+            logs = response.logs
+            returns_logs = []
+            for log in logs:
+                operation = log.o
+                operationType = operation.operationType
+                dataItem = operation.dataItem
+                value = operation.value
+                returns_logs.append({"operationType": operationType, "dataItem": dataItem, "value": value})
+                
+            return jsonify({"success": True, "logs": returns_logs})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
+
+
 if __name__ == '__main__':
     # Run gRPC server in a separate thread
     grpc_thread = threading.Thread(target=grpc_serve)
     grpc_thread.start()
     
     # Run the Flask server
-    app.run(host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5000)
