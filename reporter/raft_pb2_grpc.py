@@ -5,7 +5,7 @@ import warnings
 
 import raft_pb2 as raft__pb2
 
-GRPC_GENERATED_VERSION = '1.67.1'
+GRPC_GENERATED_VERSION = '1.67.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -49,6 +49,11 @@ class RaftStub(object):
                 request_serializer=raft__pb2.RequestOperationRequest.SerializeToString,
                 response_deserializer=raft__pb2.RequestOperationResponse.FromString,
                 _registered_method=True)
+        self.fetchLogs = channel.unary_unary(
+                '/raft.Raft/fetchLogs',
+                request_serializer=raft__pb2.fetchLogsRequest.SerializeToString,
+                response_deserializer=raft__pb2.fetchLogsResponse.FromString,
+                _registered_method=True)
 
 
 class RaftServicer(object):
@@ -72,6 +77,13 @@ class RaftServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def fetchLogs(self, request, context):
+        """Let reporter fetch logs of node
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_RaftServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -89,6 +101,11 @@ def add_RaftServicer_to_server(servicer, server):
                     servicer.RequestOperation,
                     request_deserializer=raft__pb2.RequestOperationRequest.FromString,
                     response_serializer=raft__pb2.RequestOperationResponse.SerializeToString,
+            ),
+            'fetchLogs': grpc.unary_unary_rpc_method_handler(
+                    servicer.fetchLogs,
+                    request_deserializer=raft__pb2.fetchLogsRequest.FromString,
+                    response_serializer=raft__pb2.fetchLogsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -182,6 +199,33 @@ class Raft(object):
             metadata,
             _registered_method=True)
 
+    @staticmethod
+    def fetchLogs(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/raft.Raft/fetchLogs',
+            raft__pb2.fetchLogsRequest.SerializeToString,
+            raft__pb2.fetchLogsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
 
 class ReportStub(object):
     """Missing associated documentation comment in .proto file."""
@@ -203,7 +247,8 @@ class ReportServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def SendReport(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+        """rpc for follower node to send report to reporter node
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
