@@ -225,6 +225,8 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
             Asynchronous, non-blocking sub-routine if the node is in the follower state
         """
         sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action="Starting Follower State")
+        self.votedFor = None
+        self.voteCount = 0
         while self.states[self.stateIndex] == "FOLLOWER" and self.running:  # While the node is in the follower state
             self.follower_action()
             await asyncio.sleep(HEARTBEAT_TIMEOUT)
@@ -265,7 +267,8 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
             Asynchronous, non-blocking sub-routine if the node is in the leader state
         """
         sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action="Starting Leader State")
-        
+        self.votedFor = None
+        self.voteCount = 0
         while self.states[self.stateIndex] == "LEADER" and self.running:
             self.leader_action()
             await asyncio.sleep(HEARTBEAT_TIMEOUT)
@@ -373,6 +376,10 @@ async def serve():
     server.add_insecure_port(listen_addr)
     
     print(f"Starting gRPC server on {listen_addr}")
+
+    # Wait for around 5 seconds for all nodes to start
+    await asyncio.sleep(5)
+
     await server.start()
     
     try:
