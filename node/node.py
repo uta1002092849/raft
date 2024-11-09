@@ -11,8 +11,8 @@ import datetime
 
 PORT = 50051
 HEARTBEAT_TIMEOUT = 100 / 1000  # 100ms
-ELECTION_TIMEOUT_MIN = 150 / 1000  # 150ms
-ELECTION_TIMEOUT_MAX = 300 / 1000  # 300ms
+ELECTION_TIMEOUT_MIN = 15 / 1000  # 15ms
+ELECTION_TIMEOUT_MAX = 30 / 1000  # 30ms
 NUMBER_OF_NODES = 5
 HOSTNAME = socket.gethostname()
 
@@ -289,7 +289,6 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         """Main loop to manage the node's state transitions"""
         while self.running:
             current_state = self.states[self.stateIndex]
-            
             # Cancel the previous task if it exists
             if self.current_task:
                 self.current_task.cancel()
@@ -300,6 +299,7 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
             
             # Start the appropriate coroutine based on current state
             if current_state == "FOLLOWER":
+                self.previous_recorded_time = time.time()
                 self.current_task = asyncio.create_task(self.start_follower())
             elif current_state == "CANDIDATE":
                 self.current_task = asyncio.create_task(self.start_candidate())
@@ -333,6 +333,9 @@ async def serve():
     print(f"Starting gRPC server on {listen_addr}")
 
     await server.start()
+    
+    # wait for 5 second the let the reporter server start
+    await asyncio.sleep(5)
     
     try:
         # Start the Raft node's main loop
