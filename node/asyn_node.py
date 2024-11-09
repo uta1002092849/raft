@@ -1,19 +1,18 @@
 from concurrent import futures
 import grpc
 import time
-import raft_pb2
-import raft_pb2_grpc
 import random
 import socket
 import asyncio
 import logging
 import datetime
+import raft_pb2
+import raft_pb2_grpc
 
 PORT = 50051
-HEARTBEAT_TIMEOUT = 5
-ELECTION_TIMEOUT_MIN = 10
-ELECTION_TIMEOUT_MAX = 15
-NUMBER_OF_NODES = 1
+HEARTBEAT_TIMEOUT = 100 / 1000  # 100ms
+ELECTION_TIMEOUT_MIN = 15 / 1000  # 15ms
+ELECTION_TIMEOUT_MAX = 30 / 1000  # 30ms
 HOSTNAME = socket.gethostname()
 
 # Send report to the reporter
@@ -30,11 +29,18 @@ def sendReport(sender, receiver, rpcType, action):
         try:
             stub.SendReport(raft_pb2.ReportRequest(timeStamp = current_time_ms, rpcType = rpcType, sender = sender, receiver = receiver, action = action))
         except grpc.RpcError as e:
-            print(f"Failed to send report to reporter: {e}")
+            print(f"Failed to send report to reporter")
 
 
 class RaftServicer(raft_pb2_grpc.RaftServicer):
     def __init__(self):
+        
+        # In pytest test mode or not
+        self.test = True
+        
+        # Number of nodes in the cluster
+        self.NUMBER_OF_NODES = 1
+        
         # To keep track of the current state of the node
         self.states = ["FOLLOWER", "CANDIDATE", "LEADER"]
         self.stateIndex = 0
@@ -48,25 +54,22 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         
         # To keep track of the node that the current node has voted for
         self.votedFor = None
-        self.voteCount = 0  # To keep track of the votes received by node
         
         # To keep track of the logs of the current node
         self.logs = []
 
-        # To simulate the database
+        # To simulate the state machine
         self.database = {}
         
         # Other nodes in the cluster (name, address), name will be the hostname specified in the docker-compose file
-        self.otherNodes = [("node1", "node1:50051"), ("node2", "node2:50051"), ("node3", "node3:50051"), ("node4", "node4:50051"), ("node5", "node5:50051")]
-        self.otherNodes = [node for node in self.otherNodes if node[0] != self.nodeId]  # Remove the current node from the list of other nodes
-        
+        self.otherNodes = []
         # To keep track of the last time any communication was received
         self.previous_recorded_time = time.time()
         
         # To keep track of election timeout
-        self.election_timeout = None
+        self.election_timeout = random.uniform(ELECTION_TIMEOUT_MIN, ELECTION_TIMEOUT_MAX)
 
-        # Add task management
+        # For task management
         self.current_task = None
         self.running = True
 
@@ -83,12 +86,11 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         Returns:
             A response object containing a boolean value for whether the logs are successfully synced
         """
-        sendReport(sender=request.leaderId, receiver=self.nodeId, rpcType="AppendEntries", action="Received")
+        if not self.test:
+            sendReport(sender=request.leaderId, receiver=self.nodeId, rpcType="AppendEntries", action="Received")
         
         self.stateIndex = 0                             # Roll back to the follower state as the leader has sent a heartbeat
         self.previous_recorded_time = time.time()       # Update the last time a heartbeat was received
-        self.votedFor = None                            # Reset the votedFor variable if current node was a candidate
-        self.voteCount = 0                              # Reset the vote count  if current node was a candidate
         self.logs = request.logs                        # Sync the logs with the leader
         self.leaderId = request.leaderId                # Update the leaderId
 
@@ -97,21 +99,23 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
             for i in range(self.c + 1, request.c + 1):
                 operation = self.logs[i].o
                 operationType = operation.operationType
-                if operationType == "READ":     # R(dataItem) -> value
+                if operationType == "READ":
                     dataItem = operation.dataItem
-                    action = "Read " + dataItem + " = " + (str(self.database[dataItem]) if dataItem in self.database else "Not Found")
-                    sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action=action)
-                elif operationType == "WRITE":  # W(dataItem, value) 
+                    if not self.test:
+                        action = "Read " + dataItem + " = " + (str(self.database[dataItem]) if dataItem in self.database else "Not Found")
+                        sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action=action)
+                elif operationType == "WRITE":
                     dataItem = operation.dataItem
                     dataValue = operation.value
                     self.database[dataItem] = dataValue
-                    action = "Write " + dataItem + " = " + str(dataValue)
-                    sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action=action)
+                    if not self.test:
+                        action = "Write " + dataItem + " = " + str(dataValue)
+                        sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action=action)
                 self.term = self.logs[i].t
             self.c = request.c
             return raft_pb2.AppendEntriesResponse(success=True)
         except Exception as e:
-            sendReport(sender=request.leaderId, receiver=self.nodeId, rpcType="None", action="Failed To Sync Logs")
+            print(f"Failed to sync logs: {e}")
             return raft_pb2.AppendEntriesResponse(success=False)
 
     def RequestVote(self, request, context):
@@ -124,7 +128,8 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         Returns:
             A response object containing a boolean value for whether the vote is granted
         """
-        sendReport(sender=request.candidateId, receiver=self.nodeId, rpcType="RequestVote", action="Received")
+        if not self.test:
+            sendReport(sender=request.candidateId, receiver=self.nodeId, rpcType="RequestVote", action="Received")
         
         # Check if the current node is a leader or has already voted for a candidate
         if self.states[self.stateIndex] == "LEADER" or self.votedFor is not None:
@@ -139,7 +144,8 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         """
         Asynchronous RPC call instantiated by the client to request an operation to be performed
         """
-        sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="RequestOperation", action="Received")
+        if not self.test:
+            sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="RequestOperation", action="Received")
         
         # Check if this is a valid operation
         operationType = request.operationType
@@ -158,47 +164,18 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         log = raft_pb2.Log(o=request, t=self.term, k=len(self.logs) + 1)
         self.logs.append(log)
 
-        async def append_entries_to_follower(follower_id, follower_addr):
-            try:
-                # Create async channel
-                channel = grpc.aio.insecure_channel(follower_addr)
-                stub = raft_pb2_grpc.RaftStub(channel)
-                
-                # Set timeout for RPC call
-                async with channel:
-                    response = await stub.AppendEntries(
-                        raft_pb2.AppendEntriesRequest(
-                            leaderId=self.nodeId,
-                            c=self.c,
-                            logs=self.logs
-                        ),
-                        timeout=5.0  # 5 seconds timeout
-                    )
-                    return response.success
-            except Exception as e:
-                sendReport(
-                    sender=self.nodeId,
-                    receiver=follower_id,
-                    rpcType="AppendEntries",
-                    action="Failed"
-                )
-                return False
-
         # Create tasks for all followers
         tasks = [
-            append_entries_to_follower(follower_id, follower_addr)
+            self.append_entries_to_follower(follower_id, follower_addr)
             for follower_id, follower_addr in self.otherNodes
         ]
         
         # Wait for all responses (with success count starting at 1 for leader)
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=False)
         success_count = 1 + sum(1 for result in results if result is True)
 
         # If majority of the nodes have successfully appended the log, commit the log
-        
-        # To Do: currently if success_count less than majority, the log is not committed and return false to the client
-        # Better approach would be re-send the log to the followers that failed to append the log
-        if success_count > NUMBER_OF_NODES // 2:
+        if success_count > self.NUMBER_OF_NODES // 2:
             self.c += 1
             if operationType == "READ":
                 return raft_pb2.RequestOperationResponse(
@@ -217,86 +194,83 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         """
         RPC call instanciated by the reporter to fetch the logs of the current node
         """
-        sendReport(sender="Reporter", receiver=self.nodeId, rpcType="FetchLogs", action="Received")
+        if not self.test:
+            sendReport(sender="Reporter", receiver=self.nodeId, rpcType="FetchLogs", action="Received")
         return raft_pb2.fetchLogsResponse(logs=self.logs)
     
     async def start_follower(self):
         """
             Asynchronous, non-blocking sub-routine if the node is in the follower state
         """
-        sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action="Starting Follower State")
-        while self.states[self.stateIndex] == "FOLLOWER" and self.running:  # While the node is in the follower state
-            self.follower_action()
+        if not self.test:
+            sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action="Starting Follower State")
+        self.votedFor = None
+        while self.states[self.stateIndex] == "FOLLOWER" and self.running:
+            if time.time() - self.previous_recorded_time > HEARTBEAT_TIMEOUT:
+                self.stateIndex = 1
             await asyncio.sleep(HEARTBEAT_TIMEOUT)
     
     async def start_candidate(self):
         """
             Asynchronous, non-blocking sub-routine if the node is in the candidate state
         """
-        sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action="Starting Candidate State")
+        if not self.test:
+            sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action="Starting Candidate State")
         while self.states[self.stateIndex] == "CANDIDATE" and self.running:
-            self.election_timeout = random.randint(ELECTION_TIMEOUT_MIN, ELECTION_TIMEOUT_MAX)
             
-            # Vote for self
-            self.voteCount = 1
+            print(f"Node {self.nodeId} is a candidate")
             self.term += 1
-            self.votedFor = self.nodeId
             
             # Send RequestVote RPCs to other nodes
-            self.candidate_action()
+            tasks = [
+                self.send_request_vote(id, addr) for id, addr in self.otherNodes
+            ]
             
-            # Wait for votes
-            await asyncio.sleep(self.election_timeout)
+            # Wait for all responses
+            results = await asyncio.gather(*tasks)
+            
+            # count the votes
+            success_count = (1 if self.votedFor == None else 0) + sum(1 for result in results if result is True)
+            
+            print(f"Node {self.nodeId} got {success_count} votes")
             
             # Check if we've won the election
-            if self.voteCount > NUMBER_OF_NODES // 2:
-                action = "Won Election with Votes: " + str(self.voteCount)
-                sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action=action)
+            if success_count > self.NUMBER_OF_NODES // 2:
+                print(f"Node {self.nodeId} won the election")
+                if not self.test:
+                    action = "Won Election with Votes: " + str(success_count)
+                    sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action=action)
                 self.stateIndex = 2 # Become leader
-            # Otherwise, roll back to follower state
+                self.leaderId = self.nodeId
+                print("Leader is: ", self.leaderId)
+            # Otherwise, start a new election
             else:
-                action = "Lost Election with Votes: " + str(self.voteCount)
-                sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action=action)
-                self.stateIndex = 0
-                self.previous_recorded_time = time.time()
+                action = "Lost Election with Votes: " + str(success_count)
+                if not self.test:
+                    sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action=action)
+                    self.election_timeout = random.uniform(ELECTION_TIMEOUT_MIN, ELECTION_TIMEOUT_MAX)
+                await asyncio.sleep(self.election_timeout)
+                self.votedFor = None
     
     async def start_leader(self):
         """
             Asynchronous, non-blocking sub-routine if the node is in the leader state
         """
-        sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action="Starting Leader State")
-        
+        if not self.test:
+            sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action="Starting Leader State")
         while self.states[self.stateIndex] == "LEADER" and self.running:
-            self.leader_action()
+            tasks = [
+                self.append_entries_to_follower(follower_id, follower_addr) for follower_id, follower_addr in self.otherNodes
+            ]
+            await asyncio.gather(*tasks)
             await asyncio.sleep(HEARTBEAT_TIMEOUT)
-    
-    def follower_action(self):
-        """
-        Function to handle the actions of a follower node every heartbeat timeout
-        """
-        if time.time() - self.previous_recorded_time > HEARTBEAT_TIMEOUT:
-            self.stateIndex = 1  # Transition to candidate
-            self.previous_recorded_time = time.time()
-    
-    def candidate_action(self):
-        """
-            Send RequestVote RPCs to other nodes
-        """
-        for id, addr in self.otherNodes:
-            asyncio.create_task(self.send_request_vote(id, addr))
-    
-    def leader_action(self):
-        """
-            Send AppendEntries RPCs to other nodes
-        """
-        for id, addr in self.otherNodes:
-            asyncio.create_task(self.send_append_entries(id, addr))
     
     async def send_request_vote(self, id, addr):
         """
         Asynchronous function to send a RequestVote RPC to another node
         """
-        sendReport(sender=self.nodeId, receiver=id, rpcType="RequestVote", action="Sent")
+        if not self.test:
+            sendReport(sender=self.nodeId, receiver=id, rpcType="RequestVote", action="Sent")
         
         async with grpc.aio.insecure_channel(addr) as channel:
             stub = raft_pb2_grpc.RaftStub(channel)
@@ -304,34 +278,41 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
                 response = await stub.RequestVote(
                     raft_pb2.RequestVoteRequest(term=int(self.term), candidateId=str(self.nodeId))
                 )
-                if response.voteGranted:
-                    self.voteCount += 1
+                return response.voteGranted
             except grpc.RpcError as e:
-                sendReport(sender=self.nodeId, receiver=id, rpcType="RequestVote", action="Sent Failed")
+                print(f"Failed to send RequestVote to {id}")
+                return False
 
-
-    async def send_append_entries(self, id, addr):
+    async def append_entries_to_follower(self, follower_id, follower_addr):
         """
             Asynchronous function to send an AppendEntries RPC to another node
         """
-        sendReport(sender=self.nodeId, receiver=id, rpcType="AppendEntries", action="Sent")
-        async with grpc.aio.insecure_channel(addr) as channel:
+        if not self.test:
+            sendReport(sender=self.nodeId, receiver=follower_id, rpcType="AppendEntries", action="Sent")
+        try:
+            # Create async channel
+            channel = grpc.aio.insecure_channel(follower_addr)
             stub = raft_pb2_grpc.RaftStub(channel)
-            try:
+            
+            # Set timeout for RPC call
+            async with channel:
                 response = await stub.AppendEntries(
-                    raft_pb2.AppendEntriesRequest(leaderId=str(self.nodeId), c=self.c, logs=self.logs)
+                    raft_pb2.AppendEntriesRequest(
+                        leaderId=self.nodeId,
+                        c=self.c,
+                        logs=self.logs
+                    ),
                 )
-                # assume the logs are successfully synced for now
-                # To Do
-            except grpc.RpcError as e:
-                sendReport(sender=self.nodeId, receiver=id, rpcType=f"AppendEntries", action="Sent Failed")
+                return response.success
+        except Exception as e:
+            print(f"Failed to append entries to {follower_id}")
+            return False
     
 
     async def start(self):
         """Main loop to manage the node's state transitions"""
         while self.running:
             current_state = self.states[self.stateIndex]
-            
             # Cancel the previous task if it exists
             if self.current_task:
                 self.current_task.cancel()
@@ -342,6 +323,7 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
             
             # Start the appropriate coroutine based on current state
             if current_state == "FOLLOWER":
+                self.previous_recorded_time = time.time()
                 self.current_task = asyncio.create_task(self.start_follower())
             elif current_state == "CANDIDATE":
                 self.current_task = asyncio.create_task(self.start_candidate())
@@ -373,7 +355,11 @@ async def serve():
     server.add_insecure_port(listen_addr)
     
     print(f"Starting gRPC server on {listen_addr}")
+
     await server.start()
+    
+    # wait for 5 second the let the reporter server start
+    await asyncio.sleep(5)
     
     try:
         # Start the Raft node's main loop

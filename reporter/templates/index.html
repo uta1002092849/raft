@@ -204,7 +204,7 @@
                 });
                 const data = await response.json();
                 if (data.success) {
-                    displayMessage(resultDiv, `<pre>${JSON.stringify(data.logs, null, 2)}</pre>`);
+                    displayMessage(resultDiv, `<h3>Logs from Node ${nodeAddr}</h3><pre>${JSON.stringify(data.logs, null, 2)}</pre>`);
                 } else {
                     displayMessage(resultDiv, data.error || 'Failed to fetch logs', false);
                 }
@@ -239,7 +239,11 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    displayMessage(resultDiv, operationType === 'READ' ? `Read value: ${data.value}` : 'Write operation successful');
+                    if (operationType === 'READ') {
+                        displayMessage(resultDiv, `Read value for key "${dataItem}": ${data.value}`);
+                    } else if (operationType === 'WRITE') {
+                        displayMessage(resultDiv, `Write operation successful for key "${dataItem}" with value "${value}"`);
+                    }
                 } else {
                     displayMessage(resultDiv, data.error || 'Operation failed', false);
                 }

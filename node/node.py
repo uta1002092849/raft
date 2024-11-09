@@ -1,19 +1,18 @@
 from concurrent import futures
 import grpc
 import time
-import raft_pb2
-import raft_pb2_grpc
 import random
 import socket
 import asyncio
 import logging
 import datetime
+import raft_pb2
+import raft_pb2_grpc
 
 PORT = 50051
 HEARTBEAT_TIMEOUT = 100 / 1000  # 100ms
 ELECTION_TIMEOUT_MIN = 15 / 1000  # 15ms
 ELECTION_TIMEOUT_MAX = 30 / 1000  # 30ms
-NUMBER_OF_NODES = 5
 HOSTNAME = socket.gethostname()
 
 # Send report to the reporter
@@ -35,6 +34,10 @@ def sendReport(sender, receiver, rpcType, action):
 
 class RaftServicer(raft_pb2_grpc.RaftServicer):
     def __init__(self):
+        
+        # Number of nodes in the cluster
+        self.NUMBER_OF_NODES = 5
+        
         # To keep track of the current state of the node
         self.states = ["FOLLOWER", "CANDIDATE", "LEADER"]
         self.stateIndex = 0
@@ -166,7 +169,7 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         success_count = 1 + sum(1 for result in results if result is True)
 
         # If majority of the nodes have successfully appended the log, commit the log
-        if success_count > NUMBER_OF_NODES // 2:
+        if success_count > self.NUMBER_OF_NODES // 2:
             self.c += 1
             if operationType == "READ":
                 return raft_pb2.RequestOperationResponse(
@@ -220,10 +223,11 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
             success_count = (1 if self.votedFor == None else 0) + sum(1 for result in results if result is True)
             
             # Check if we've won the election
-            if success_count > NUMBER_OF_NODES // 2:
+            if success_count > self.NUMBER_OF_NODES // 2:
                 action = "Won Election with Votes: " + str(success_count)
                 sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action=action)
                 self.stateIndex = 2 # Become leader
+                self.leaderId = self.nodeId
             # Otherwise, start a new election
             else:
                 action = "Lost Election with Votes: " + str(success_count)
