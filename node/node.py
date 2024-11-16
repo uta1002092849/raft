@@ -11,8 +11,8 @@ import raft_pb2_grpc
 
 PORT = 50051
 HEARTBEAT_TIMEOUT = 100 / 1000  # 100ms
-ELECTION_TIMEOUT_MIN = 15 / 1000  # 15ms
-ELECTION_TIMEOUT_MAX = 30 / 1000  # 30ms
+ELECTION_TIMEOUT_MIN = 150 / 1000  # 15ms
+ELECTION_TIMEOUT_MAX = 300 / 1000  # 30ms
 HOSTNAME = socket.gethostname()
 
 # Send report to the reporter
@@ -153,7 +153,6 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         if self.states[self.stateIndex] != "LEADER":
             # Redirect the client to the leader
             return raft_pb2.RequestOperationResponse(success=False, leaderAddr=self.leaderId + ":50051")
-        
         # Construct Log object
         log = raft_pb2.Log(o=request, t=self.term, k=len(self.logs) + 1)
         self.logs.append(log)
