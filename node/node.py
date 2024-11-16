@@ -10,9 +10,9 @@ import raft_pb2
 import raft_pb2_grpc
 
 PORT = 50051
-HEARTBEAT_TIMEOUT = 5
-ELECTION_TIMEOUT_MIN = 10
-ELECTION_TIMEOUT_MAX = 15
+HEARTBEAT_TIMEOUT = 10
+ELECTION_TIMEOUT_MIN = 15
+ELECTION_TIMEOUT_MAX = 30
 HOSTNAME = socket.gethostname()
 
 # Send report to the reporter
@@ -214,6 +214,10 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
             
             self.term += 1
             
+            # vote for self if not voted for anyone
+            if self.votedFor is None:
+                self.votedFor = self.nodeId 
+            
             # Send RequestVote RPCs to other nodes
             tasks = [
                 self.send_request_vote(id, addr) for id, addr in self.otherNodes
@@ -223,7 +227,7 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
             results = await asyncio.gather(*tasks)
             
             # count the votes
-            success_count = (1 if self.votedFor == None else 0) + sum(1 for result in results if result is True)
+            success_count = (1 if self.votedFor == self.nodeId else 0) + sum(1 for result in results if result is True)
             
             # Check if we've won the election
             if success_count > self.NUMBER_OF_NODES // 2:
@@ -235,9 +239,10 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
             else:
                 action = "Lost Election with Votes: " + str(success_count)
                 sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action=action)
+                self.votedFor = None
                 self.election_timeout = random.uniform(ELECTION_TIMEOUT_MIN, ELECTION_TIMEOUT_MAX)
                 await asyncio.sleep(self.election_timeout)
-                self.votedFor = None
+
     
     async def start_leader(self):
         """
@@ -341,8 +346,8 @@ async def serve():
 
     await server.start()
     
-    # wait for 10 second the let the reporter server start
-    await asyncio.sleep(10)
+    # wait for 5 second the let the reporter server start
+    await asyncio.sleep(5)
     
     try:
         # Start the Raft node's main loop
