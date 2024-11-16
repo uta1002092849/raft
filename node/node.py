@@ -10,9 +10,9 @@ import raft_pb2
 import raft_pb2_grpc
 
 PORT = 50051
-HEARTBEAT_TIMEOUT = 100 / 1000  # 100ms
-ELECTION_TIMEOUT_MIN = 150 / 1000  # 15ms
-ELECTION_TIMEOUT_MAX = 300 / 1000  # 30ms
+HEARTBEAT_TIMEOUT = 10
+ELECTION_TIMEOUT_MIN = 15
+ELECTION_TIMEOUT_MAX = 20
 HOSTNAME = socket.gethostname()
 
 # Send report to the reporter
@@ -199,6 +199,8 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         while self.states[self.stateIndex] == "FOLLOWER" and self.running:
             if time.time() - self.previous_recorded_time > HEARTBEAT_TIMEOUT:
                 self.stateIndex = 1
+                # Start a new election
+                break
             await asyncio.sleep(HEARTBEAT_TIMEOUT)
     
     async def start_candidate(self):
@@ -292,14 +294,6 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         """Main loop to manage the node's state transitions"""
         while self.running:
             current_state = self.states[self.stateIndex]
-            # Cancel the previous task if it exists
-            if self.current_task:
-                self.current_task.cancel()
-                try:
-                    await self.current_task
-                except asyncio.CancelledError:
-                    pass
-            
             # Start the appropriate coroutine based on current state
             if current_state == "FOLLOWER":
                 self.previous_recorded_time = time.time()
@@ -308,14 +302,7 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
                 self.current_task = asyncio.create_task(self.start_candidate())
             else:  # LEADER
                 self.current_task = asyncio.create_task(self.start_leader())
-            
-            # Wait for the current task to complete
-            try:
-                await self.current_task
-            except asyncio.CancelledError:
-                pass
-            
-            await asyncio.sleep(0.1)  # Small delay to prevent busy waiting
+            await self.current_task
 
     def stop(self):
         """Stop the node gracefully"""
@@ -337,11 +324,12 @@ async def serve():
 
     await server.start()
     
-    # wait for 5 second the let the reporter server start
-    await asyncio.sleep(5)
+    # wait for 15 second the let the reporter server start
+    await asyncio.sleep(10)
     
     try:
         # Start the Raft node's main loop
+        node.previous_recorded_time = time.time()
         await node.start()
     
     except KeyboardInterrupt:
@@ -350,5 +338,4 @@ async def serve():
         await server.stop(5)
 
 if __name__ == '__main__':
-    logging.basicConfig()
     asyncio.run(serve())
