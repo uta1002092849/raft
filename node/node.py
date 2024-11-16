@@ -10,9 +10,9 @@ import raft_pb2
 import raft_pb2_grpc
 
 PORT = 50051
-HEARTBEAT_TIMEOUT = 100 / 1000  # 100ms
-ELECTION_TIMEOUT_MIN = 15 / 1000  # 15ms
-ELECTION_TIMEOUT_MAX = 30 / 1000  # 30ms
+HEARTBEAT_TIMEOUT = 5
+ELECTION_TIMEOUT_MIN = 10
+ELECTION_TIMEOUT_MAX = 15
 HOSTNAME = socket.gethostname()
 
 # Send report to the reporter
@@ -24,6 +24,8 @@ def sendReport(sender, receiver, rpcType, action):
 
         # only keep hours, minutes, seconds and milliseconds
         current_time_ms = current_time_ms[-15:]
+        
+        print(f"Sending report to reporter: {current_time_ms} {rpcType} {sender} {receiver} {action}")
         
         # Send the report
         try:
@@ -198,9 +200,10 @@ class RaftServicer(raft_pb2_grpc.RaftServicer):
         sendReport(sender=self.nodeId, receiver=self.nodeId, rpcType="None", action="Starting Follower State")
         self.votedFor = None
         while self.states[self.stateIndex] == "FOLLOWER" and self.running:
-            if time.time() - self.previous_recorded_time > HEARTBEAT_TIMEOUT:
+            if time.time() - self.previous_recorded_time > self.election_timeout:
                 self.stateIndex = 1
-            await asyncio.sleep(HEARTBEAT_TIMEOUT)
+                break
+            await asyncio.sleep(self.election_timeout)
     
     async def start_candidate(self):
         """
@@ -338,8 +341,8 @@ async def serve():
 
     await server.start()
     
-    # wait for 5 second the let the reporter server start
-    await asyncio.sleep(5)
+    # wait for 10 second the let the reporter server start
+    await asyncio.sleep(10)
     
     try:
         # Start the Raft node's main loop

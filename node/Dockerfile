@@ -11,4 +11,4 @@ COPY . /app
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Run server.py when the container launches
-CMD ["python", "node.py"]
+CMD ["python","-u", "node.py"]
