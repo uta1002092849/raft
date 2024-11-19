@@ -3,8 +3,6 @@ syntax = "proto3";
 option go_package = "./raft";
 package raft;
 
-package raft;
-
 message Log {
     RequestOperationRequest o = 1;      // current log operation
     int32 t = 2;                        // term associated with this log
