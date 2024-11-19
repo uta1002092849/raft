@@ -1,6 +1,6 @@
 services:
   node1:
-    build: ./node
+    build: ./node_go
     container_name: node1
     hostname: node1
     networks:
@@ -9,7 +9,7 @@ services:
     depends_on:
       - reporter
   node2:
-    build: ./node
+    build: ./node_go
     container_name: node2
     hostname: node2
     networks:
@@ -18,7 +18,7 @@ services:
     depends_on:
       - reporter
   node3:
-    build: ./node
+    build: ./node_go
     container_name: node3
     hostname: node3
     networks:
@@ -27,7 +27,7 @@ services:
     depends_on:
       - reporter
   node4:
-    build: ./node
+    build: ./node_go
     container_name: node4
     hostname: node4
     networks:
@@ -36,7 +36,7 @@ services:
     depends_on:
       - reporter
   node5:
-    build: ./node
+    build: ./node_go
     container_name: node5
     hostname: node5
     networks:
