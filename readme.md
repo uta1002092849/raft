@@ -4,9 +4,10 @@ This project implements a simplified version of the Raft consensus algorithm usi
 
 ## Project Structure
 
-- `node.py`: Implements the Raft node logic, including state transitions (Follower, Candidate, Leader), log replication, and handling client requests.
-- `reporter.py`: Implements the reporter service that logs operations and provides a web interface to view the logs.
-- `index.html`: The web interface for interacting with the Raft cluster and viewing logs.
+- `.\node_python\node.py`: Implements the Raft node logic, including state transitions (Follower, Candidate, Leader), log replication, and handling client requests.
+- `.\node_go\node.go`: Similar to node.py but in go
+- `.\reporter\reporter.py`: Implements the reporter service that logs operations and provides a web interface to view the logs.
+- `.\reporter\index.html`: The web interface for interacting with the Raft cluster and viewing logs.
 - `raft.proto`: Protocol Buffers definition file for gRPC communication.
 
 ## Requirements

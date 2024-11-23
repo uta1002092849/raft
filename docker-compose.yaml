@@ -18,7 +18,7 @@ services:
     depends_on:
       - reporter
   node3:
-    build: ./node_go
+    build: ./node_python
     container_name: node3
     hostname: node3
     networks:
@@ -27,7 +27,7 @@ services:
     depends_on:
       - reporter
   node4:
-    build: ./node_go
+    build: ./node_python
     container_name: node4
     hostname: node4
     networks:
@@ -36,7 +36,7 @@ services:
     depends_on:
       - reporter
   node5:
-    build: ./node_go
+    build: ./node_python
     container_name: node5
     hostname: node5
     networks:
